@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Professional HTML  with complete functionality
+# Professional HTML template with complete functionality
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Gen - Professional Email Testing</title>
+    <title>MailSlurp Pro - Professional Email Testing</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -44,8 +44,8 @@ INDEX_HTML = """
                         <i class="fas fa-envelope text-white text-xl"></i>
                     </div>
                     <div>
-                        <h1 class="text-2xl font-bold text-gray-900">Email pro</h1>
-                        <p class="text-sm text-gray-500">Professional Email generator By <b>Israel Dev</b></p>
+                        <h1 class="text-2xl font-bold text-gray-900">MailSlurp Pro</h1>
+                        <p class="text-sm text-gray-500">Professional Email Testing Platform</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
@@ -366,302 +366,47 @@ INDEX_HTML = """
             }
 
             elements.waitEmailBtn.disabled = true;
+            elements.waitEmailBtn.innerHTML = '<i class="fas fa-spinner loading mr-2"></i>Waiting...';
             elements.waitingIndicator.classList.remove('hidden');
             updateStatus('Waiting for email...', 'warning');
 
             try {
                 const result = await waitEmail(currentApiKey, currentInboxId);
                 
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-
-                currentEmailData = result;
-                displayEmail(result);
-                
-                stats.emails++;
-                updateStats();
-                updateStatus('Email received', 'success');
-                showToast('Email received successfully!', 'success');
-                
-            } catch (error) {
-                showToast(`Error: ${error.message}`, 'error');
-                updateStatus('Error waiting for email', 'error');
-            } finally {
-                elements.waitEmailBtn.disabled = false;
-                elements.waitingIndicator.classList.add('hidden');
-            }
-        });
-
-        elements.copyEmail.addEventListener('click', async () => {
-            const email = elements.emailAddress.textContent;
-            try {
-                await navigator.clipboard.writeText(email);
-                showToast('Email address copied to clipboard!', 'success');
-            } catch (error) {
-                showToast('Failed to copy email address', 'error');
-            }
-        });
-
-        elements.extractOtpBtn.addEventListener('click', async () => {
-            if (!currentEmailData) {
-                showToast('No email data available', 'error');
-                return;
-            }
-
-            try {
-                const content = currentEmailData.body || currentEmailData.htmlBody || '';
-                const result = await extractOtp(content);
-                
-                if (result.otp) {
-                    elements.otpResult.innerHTML = `<span class="font-mono bg-yellow-100 px-2 py-1 rounded text-yellow-800">${result.otp}</span>`;
-                    showToast(`OTP extracted: ${result.otp}`, 'success');
+                if (result.success) {
+                    // Email received successfully
+                    currentEmailData = result;
+                    displayEmail(result);
+                    
+                    stats.emails++;
+                    updateStats();
+                    updateStatus('Email received', 'success');
+                    showToast('Email received successfully!', 'success');
+                } else if (result.timeout) {
+                    // Timeout - no email received
+                    updateStatus('No email received', 'warning');
+                    showToast(`No email received within ${result.timeoutDuration} seconds. Send an email to the inbox and try again.`, 'warning');
+                    
+                    // Show helpful message in email content area
+                    elements.emailContent.innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fas fa-clock text-yellow-400 text-4xl mb-4"></i>
+                            <h3 class="text-lg font-semibold text-gray-700 mb-2">No Email Received</h3>
+                            <p class="text-gray-500 mb-4">No email was received within the 60-second timeout period.</p>
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                                <h4 class="font-medium text-blue-800 mb-2">Next Steps:</h4>
+                                <ol class="text-sm text-blue-700 text-left space-y-1">
+                                    <li>1. Send an email to: <strong class="font-mono">${elements.emailAddress.textContent}</strong></li>
+                                    <li>2. Click "Wait for Email" again</li>
+                                    <li>3. The system will wait up to 60 seconds for new emails</li>
+                                </ol>
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    elements.otpResult.innerHTML = '<span class="text-gray-500">No OTP found</span>';
-                    showToast('No OTP found in email', 'warning');
+                    // Other error
+                    throw new Error(result.error || 'Unknown error occurred');
                 }
+                
             } catch (error) {
-                showToast(`Error extracting OTP: ${error.message}`, 'error');
-            }
-        });
-
-        elements.clearBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear all data?')) {
-                currentInboxId = null;
-                currentApiKey = null;
-                currentEmailData = null;
-                
-                elements.inboxInfo.classList.add('hidden');
-                elements.emailDetails.classList.add('hidden');
-                elements.waitEmailBtn.disabled = true;
-                elements.apiKey.value = '';
-                elements.otpResult.innerHTML = '';
-                
-                elements.emailContent.innerHTML = `
-                    <div class="text-center py-12">
-                        <i class="fas fa-envelope-open text-gray-300 text-4xl mb-4"></i>
-                        <p class="text-gray-500">Create an inbox and wait for emails to display content here</p>
-                    </div>
-                `;
-                
-                updateStatus('Ready', 'info');
-                showToast('All data cleared', 'info');
-            }
-        });
-
-        elements.exportBtn.addEventListener('click', () => {
-            if (!currentEmailData) {
-                showToast('No email data to export', 'error');
-                return;
-            }
-
-            const exportData = {
-                inbox: {
-                    id: currentInboxId,
-                    email: elements.emailAddress.textContent,
-                    created: elements.createdAt.textContent
-                },
-                email: currentEmailData,
-                exportedAt: new Date().toISOString()
-            };
-
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(dataBlob);
-            link.download = `mailslurp-export-${Date.now()}.json`;
-            link.click();
-            
-            showToast('Data exported successfully', 'success');
-        });
-
-        function displayEmail(emailData) {
-            const content = emailData.htmlBody || emailData.body || 'No content available';
-            
-            elements.emailContent.innerHTML = `
-                <div class="fade-in">
-                    <div class="prose max-w-none">
-                        ${emailData.htmlBody ? content : `<pre class="whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">${content}</pre>`}
-                    </div>
-                </div>
-            `;
-
-            // Update email details
-            document.getElementById('emailFrom').textContent = emailData.from || 'N/A';
-            document.getElementById('emailSubject').textContent = emailData.subject || 'No Subject';
-            document.getElementById('emailReceived').textContent = formatDate(emailData.receivedAt);
-            document.getElementById('emailId').textContent = emailData.id || 'N/A';
-            
-            elements.emailDetails.classList.remove('hidden');
-            elements.emailDetails.classList.add('slide-in');
-        }
-
-        // Initialize
-        updateStats();
-        updateStatus('Ready', 'info');
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/')
-def index():
-    """Serve the main application page"""
-    return render_template_string(INDEX_HTML)
-
-@app.route('/api/create_inbox', methods=['POST'])
-def api_create_inbox():
-    """Create a new MailSlurp inbox"""
-    try:
-        data = request.get_json() or {}
-        api_key = data.get('apiKey')
-        
-        if not api_key:
-            logger.warning("API key missing in create_inbox request")
-            return jsonify({'error': 'API key is required'}), 400
-
-        # Configure MailSlurp client
-        config = mailslurp_client.Configuration()
-        config.api_key['x-api-key'] = api_key
-        
-        with mailslurp_client.ApiClient(config) as client:
-            inbox_api = mailslurp_client.InboxControllerApi(client)
-            inbox = inbox_api.create_inbox()
-            
-            logger.info(f"Created inbox: {inbox.id} ({inbox.email_address})")
-            
-            return jsonify({
-                'id': inbox.id,
-                'emailAddress': inbox.email_address,
-                'createdAt': inbox.created_at.isoformat() if inbox.created_at else None
-            })
-            
-    except ApiException as e:
-        logger.error(f"MailSlurp API error in create_inbox: {e}")
-        error_msg = f"MailSlurp API error: {e.reason if hasattr(e, 'reason') else str(e)}"
-        return jsonify({'error': error_msg}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error in create_inbox: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/api/wait_email', methods=['POST'])
-def api_wait_email():
-    """Wait for the latest email in an inbox"""
-    try:
-        data = request.get_json() or {}
-        api_key = data.get('apiKey')
-        inbox_id = data.get('inboxId')
-        timeout = data.get('timeout', 60000)  # Default 60 seconds
-        
-        if not api_key or not inbox_id:
-            logger.warning("Missing apiKey or inboxId in wait_email request")
-            return jsonify({'error': 'API key and inbox ID are required'}), 400
-
-        # Configure MailSlurp client
-        config = mailslurp_client.Configuration()
-        config.api_key['x-api-key'] = api_key
-        
-        with mailslurp_client.ApiClient(config) as client:
-            wait_api = mailslurp_client.WaitForControllerApi(client)
-            email = wait_api.wait_for_latest_email(
-                inbox_id=inbox_id,
-                timeout=timeout,
-                unread_only=True
-            )
-            
-            logger.info(f"Received email: {email.id} in inbox {inbox_id}")
-            
-            return jsonify({
-                'id': email.id,
-                'subject': email.subject,
-                'from': email._from,  # Note: 'from' is a reserved keyword
-                'body': email.body,
-                'htmlBody': email.html_body,
-                'receivedAt': email.received_at.isoformat() if email.received_at else None,
-                'to': email.to,
-                'attachments': len(email.attachments) if email.attachments else 0
-            })
-            
-    except ApiException as e:
-        logger.error(f"MailSlurp API error in wait_email: {e}")
-        error_msg = f"MailSlurp API error: {e.reason if hasattr(e, 'reason') else str(e)}"
-        return jsonify({'error': error_msg}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error in wait_email: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/api/extract_otp', methods=['POST'])
-def api_extract_otp():
-    """Extract OTP/verification codes from email content"""
-    try:
-        data = request.get_json() or {}
-        content = data.get('content', '')
-        
-        if not content:
-            return jsonify({'otp': None, 'message': 'No content provided'})
-        
-        # Enhanced OTP patterns
-        patterns = [
-            r'\b(\d{4,8})\b',  # 4-8 digit codes
-            r'(?:code|otp|pin)[\s:]*(\d{4,8})',  # "code: 123456"
-            r'verification[\s\w]*?(\d{4,8})',  # "verification code 123456"
-            r'(\d{6})',  # Common 6-digit pattern
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                otp = match.group(1)
-                logger.info(f"Extracted OTP: {otp}")
-                return jsonify({'otp': otp, 'pattern': pattern})
-        
-        logger.info("No OTP found in content")
-        return jsonify({'otp': None, 'message': 'No OTP pattern found'})
-        
-    except Exception as e:
-        logger.error(f"Error in extract_otp: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
-    })
-
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors"""
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(405)
-def method_not_allowed(error):
-    """Handle 405 errors"""
-    return jsonify({'error': 'Method not allowed'}), 405
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors"""
-    logger.error(f"Internal server error: {error}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    # Configuration from environment variables
-    port = int(os.getenv('PORT', 5000))
-    debug = os.getenv('DEBUG', 'false').lower() in ('1', 'true')
-    host = os.getenv('HOST', '0.0.0.0')
-    
-    logger.info(f"Starting MailSlurp Pro application on {host}:{port}")
-    logger.info(f"Debug mode: {'enabled' if debug else 'disabled'}")
-    
-    # Install flask-cors if not available
-    try:
-        from flask_cors import CORS
-    except ImportError:
-        logger.warning("flask-cors not installed. Install with: pip install flask-cors")
-        CORS = lambda app: None  # Dummy function if CORS not available
-    
-    app.run(host=host, port=port, debug=debug)
+                showToast(`Error: ${error.message}`,
